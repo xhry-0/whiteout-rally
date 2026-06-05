@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ホワサバ集結管理 Ultimate</title>
+<style>
+:root{--bg:#0f172a;--card:#1e293b;--accent:#3b82f6;--green:#22c55e;--red:#ef4444}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:#fff;font-family:sans-serif;max-width:560px;padding:12px;margin:auto}
+h1{text-align:center;background:var(--card);padding:12px;border-radius:12px}
+.sec{background:var(--card);padding:12px;border-radius:12px;margin:10px 0}
+.clock{text-align:center;font:700 42px monospace;color:var(--green)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button,input,select{width:100%;padding:12px;border:none;border-radius:10px}
+.btn{background:#334155;color:#fff}.active{background:var(--accent)!important}
+.add{background:var(--green);color:#fff}.danger{background:var(--red);color:#fff}
+.row{display:flex;gap:8px}.row>*{flex:1}
+.item{padding:8px 0;border-bottom:1px solid #334155;display:flex;justify-content:space-between}
+.small{font-size:12px;color:#cbd5e1}
+</style>
+</head>
+<body>
+<h1>ホワサバ集結管理</h1>
+
+<div class="sec"><div>現在時刻(UTC)</div><div id="clock" class="clock"></div></div>
+
+<div class="sec">
+<b>【集結先】</b>
+<div class="grid">
+<button class="btn tgt active" data-v="🏰城">🏰城</button>
+<button class="btn tgt" data-v="🛡️要塞">🛡️要塞</button>
+<button class="btn tgt" data-v="🏹砦">🏹砦</button>
+<button class="btn tgt" data-v="💣砲台">💣砲台</button>
+</div>
+<input id="customTarget" placeholder="自由入力">
+</div>
+
+<div class="sec">
+<b>【集結時間】</b>
+<div class="grid">
+<button class="btn g active" data-v="1">1分</button>
+<button class="btn g" data-v="5">5分</button>
+</div>
+</div>
+
+<div class="sec">
+<b>【目標到着時間】</b>
+<div class="row"><select id="hh"></select><select id="mm"></select></div>
+</div>
+
+<div class="sec">
+<b>【集結主・行軍時間】</b>
+<input id="leader" list="leaders" placeholder="集結主">
+<datalist id="leaders"></datalist>
+<input id="march" type="number" value="45" placeholder="行軍時間(秒)">
+<button class="add" onclick="addRecord()">追加</button>
+</div>
+
+<div class="sec"><b>【集結主管理】</b><div id="leaderMgr"></div></div>
+<div class="sec"><b>【登録一覧】</b><div id="records"></div></div>
+
+<button class="btn" onclick="copyChat()">📋 チャットコピー</button>
+<button class="danger" onclick="clearAll()">🗑 全件削除</button>
+
+<script>
+let leaders=JSON.parse(localStorage.getItem('leaders')||'["Alice","Bob","Charlie"]');
+let records=JSON.parse(localStorage.getItem('records')||'[]');
+let target="🏰城", gather=1;
+
+function save(){localStorage.setItem('leaders',JSON.stringify(leaders));localStorage.setItem('records',JSON.stringify(records));}
+function utc(){let d=new Date();clock.textContent=`${String(d.getUTCHours()).padStart(2,'0')}:${String(d.getUTCMinutes()).padStart(2,'0')}:${String(d.getUTCSeconds()).padStart(2,'0')}`}
+setInterval(utc,1000); utc();
+
+for(let i=0;i<24;i++) hh.innerHTML+=`<option>${String(i).padStart(2,'0')}</option>`;
+for(let i=0;i<60;i++) mm.innerHTML+=`<option>${String(i).padStart(2,'0')}</option>`;
+
+document.querySelectorAll('.tgt').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tgt').forEach(x=>x.classList.remove('active'));b.classList.add('active');target=b.dataset.v;});
+document.querySelectorAll('.g').forEach(b=>b.onclick=()=>{document.querySelectorAll('.g').forEach(x=>x.classList.remove('active'));b.classList.add('active');gather=+b.dataset.v;});
+
+function refreshLeaders(){
+leaders.innerHTML='';
+document.getElementById('leaders').innerHTML=leaders.map(x=>`<option value="${x}">`).join('');
+leaderMgr.innerHTML=leaders.map((x,i)=>`<div class=item><span>${x}</span><button class=danger onclick="delLeader(${i})">削除</button></div>`).join('');
+save();
+}
+function delLeader(i){leaders.splice(i,1);refreshLeaders();}
+
+function addRecord(){
+ let n=leader.value.trim(); if(!n) return alert('集結主名を入力');
+ if(!leaders.includes(n)){leaders.push(n);refreshLeaders();}
+ let arrival=new Date(); arrival.setUTCHours(+hh.value,+mm.value,0,0);
+ let depart=new Date(arrival.getTime()-(gather*60+ (+march.value||0))*1000);
+ let time=`${String(depart.getUTCHours()).padStart(2,'0')}:${String(depart.getUTCMinutes()).padStart(2,'0')}:${String(depart.getUTCSeconds()).padStart(2,'0')}`;
+ records.push({name:n,target:(customTarget.value.trim()||target),gather,time});
+ records.sort((a,b)=>a.time.localeCompare(b.time));
+ render(); save();
+}
+
+function render(){
+ recordsDiv=document.getElementById('records');
+ recordsDiv.innerHTML=records.map((r,i)=>`<div class=item><div>${i+1}️⃣ ${r.name} ${r.target}<br>${r.time}</div><button class=danger onclick="delRec(${i})">削除</button></div>`).join('');
+}
+function delRec(i){records.splice(i,1);render();save();}
+
+function copyChat(){
+ if(!records.length)return;
+ let g={};
+ records.forEach(r=>{let k=r.target+'|'+r.gather;(g[k]??=[]).push(r);});
+ let txt='【集結出発時間(UTC)】\n';
+ Object.values(g).forEach(arr=>{
+   txt+=`\n集結先：${arr[0].target}／集結時間：${arr[0].gather}分\n`;
+   arr.forEach((r,i)=>txt+=`${i+1} ${r.name}　${r.time}\n`);
+ });
+ navigator.clipboard.writeText(txt);
+ alert('コピーしました');
+}
+function clearAll(){if(confirm('全件削除しますか？')){records=[];render();save();}}
+
+refreshLeaders(); render();
+if('serviceWorker' in navigator){}
+</script>
+</body>
+</html>
